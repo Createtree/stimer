@@ -17,7 +17,6 @@
 
 ---
 
-
 - 基于时间片轮换的调度
 - 支持任务优先级（不支持抢占任务）
 - 支持无动态内存分配，降低安全风险
@@ -43,7 +42,7 @@ void main()
     // other init ...
 
     /* [3] Create stimer task */
-    uint16_t stimer_create_task(void (*task_callback)(void*),
+    uint16_t stimer_create_task(void (*task_callback)(const void* arg),
 				stimer_time_t interval,
 				uint8_t priority,
 				uint16_t repetitions,
@@ -64,12 +63,17 @@ void systick_interrupt_callback(void)
 
 ```
 
-
 ## Update Log 更新日志
-
 
 ### 2024.02.19
 
 - First create file
 - Complete basic functions
 - Add Unit Test
+
+### 2024.02.22
+
+- Added and adjusted the definition of task function types
+- Added user assertion callback
+- Fixed compiler warnings
+- Fixed timetick overflow issue

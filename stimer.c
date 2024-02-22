@@ -15,11 +15,15 @@ void stimer_init(stimer_task_t *pTasks, uint16_t Size)
     hstimer.timetick = 0;
     hstimer.wait_cnt = 0;
     hstimer.wait_id = 0;
+    hstimer.reset_cnt = 0;
     #if !!(STIMER_TASK_HOOK_ENABLE)
     hstimer.task_start_hook = NULL;
     hstimer.task_end_hook = NULL;
     hstimer.task_stop_hook = NULL;
     hstimer.task_schedule_hook = NULL;
+    #endif
+    #if !!(STIMER_ASSERT_ENABLE)
+    hstimer.user_assert_callback = NULL;
     #endif
 }
 
@@ -33,7 +37,7 @@ void stimer_init(stimer_task_t *pTasks, uint16_t Size)
  * @retval uint16_t task ID
  * @note Use the function after stimer_init()
  */
-uint16_t stimer_create_task(void (*task_callback)(void*), stimer_time_t interval, uint8_t priority, uint16_t repetitions, void *arg)
+uint16_t stimer_create_task(stimer_pfunc_t task_callback, stimer_time_t interval, uint8_t priority, uint16_t repetitions, void *arg)
 {
     STIMER_ASSERT(task_callback != NULL);
     STIMER_ASSERT(priority <= STIMER_MAX_PRIORITY);
@@ -71,14 +75,12 @@ void stimer_scheduler(uint16_t id)
     min = hstimer.wait_id;
     if (hstimer.ptasks[id].repetitions == 0) return;
     /* 计算到期时间 */
-    if (STIMER_MAX_TIMETICK - hstimer.timetick >= hstimer.ptasks[id].interval)
+    if (STIMER_MAX_TIMETICK - hstimer.timetick < hstimer.ptasks[id].interval)
     {
-        hstimer.ptasks[id].expire = hstimer.ptasks[id].interval + hstimer.timetick;
+        /* 若到期时间超过计数上限则重置定时器时间刻*/
+        stimer_reset();
     }
-    else
-    {
-        hstimer.ptasks[id].expire = STIMER_MAX_TIMETICK; //FIXME: expire time over the max tick
-    }
+    hstimer.ptasks[id].expire = hstimer.ptasks[id].interval + hstimer.timetick;
     /* 将任务安排到计划表,等待列表中存在该任务则重新安排 */
 
     /* 查找并移除相同id的任务 */
@@ -148,7 +150,7 @@ void stimer_scheduler(uint16_t id)
 }
 
 /**
- * @brief run the stimer tick
+ * @brief Run the stimer tick
  * @note Call this function in systick interrupt
  */
 void stimer_tick_increase(void)
@@ -156,8 +158,34 @@ void stimer_tick_increase(void)
     hstimer.timetick++;
 }
 
+void stimer_reset(void)
+{
+    stimer_time_t tick = hstimer.timetick;
+    uint16_t i;
+    stimer_task_t *ptask;
+
+    if (hstimer.wait_cnt > 0)
+    {
+        ptask = &hstimer.ptasks[hstimer.wait_id];
+        for (i = 0; i < hstimer.wait_cnt; i++)
+        {
+            if (ptask->expire > tick)
+            {
+                ptask->expire -= tick;
+            }
+            else
+            {
+                ptask->expire = 0;
+            }
+            ptask = &hstimer.ptasks[ptask->next_id];
+        }
+    }
+    hstimer.timetick = 0;
+    hstimer.reset_cnt++;
+}
+
 /**
- * @brief stop a stimer task
+ * @brief Stop a stimer task
  * @param id task id
  */
 void stimer_task_stop(uint16_t id)
@@ -195,7 +223,6 @@ void stimer_task_stop(uint16_t id)
 void stimer_serve(void)
 {
     stimer_task_t *ptask;
-    uint32_t i;
     /* 判断任务是否到期 */
     while (hstimer.wait_cnt && hstimer.ptasks[hstimer.wait_id].expire <= hstimer.timetick)
     {
@@ -264,16 +291,51 @@ uint16_t stimer_get_waitID(void)
     return hstimer.wait_id;
 }
 
+/**
+ * @brief Obtain the expiration time of the next task
+ * @retval stimer_time_t expiration time
+ * @warning If stiemr_get_waitCnt() is 0, the function always retrun 0
+ */
 stimer_time_t stimer_get_nextExpire(void)
 {
     if (hstimer.wait_cnt == 0) return 0;
     return hstimer.ptasks[hstimer.wait_id].expire;
 }
 
+uint16_t stimer_get_resetCnt(void)
+{
+    return hstimer.reset_cnt;
+}
+
+/**
+ * @brief Get a wait task
+ * @param id task id
+ * @retval stimer_task_t* task handle
+ */
 stimer_task_t *stimer_get_task(uint16_t id)
 {
     STIMER_ASSERT(id < hstimer.size);
-    return &hstimer.ptasks[id];
+    uint16_t i;
+    stimer_task_t *ptask;
+
+    if (hstimer.wait_cnt == 0)
+    {
+        return NULL;
+    }
+    if (hstimer.wait_id == id)
+    {
+        return &hstimer.ptasks[hstimer.wait_id];
+    }
+    ptask = &hstimer.ptasks[hstimer.wait_id];
+    for (i = 1; i < hstimer.wait_cnt; i++)
+    {
+        if (ptask->next_id == id)
+        {
+            return &hstimer.ptasks[ptask->next_id];
+        }
+        ptask = &hstimer.ptasks[ptask->next_id];
+    }
+    return NULL;
 }
 
 stimer_time_t stimer_task_get_interval(uint16_t id)
@@ -334,6 +396,7 @@ void stimer_task_set_interval(uint16_t id, stimer_time_t interval)
 void stimer_task_set_priority(uint16_t id, uint16_t priority)
 {
     STIMER_ASSERT(id < hstimer.size);
+    STIMER_ASSERT(priority <= STIMER_MAX_PRIORITY);
     hstimer.ptasks[id].priority = priority;
 }
 
@@ -343,14 +406,14 @@ void stimer_task_set_repetitions(uint16_t id, uint16_t repetitions)
     hstimer.ptasks[id].repetitions = repetitions;
 }
 
-void stimer_task_set_callback(uint16_t id, void (*task_callback)(void*))
+void stimer_task_set_callback(uint16_t id, stimer_pfunc_t task_callback)
 {
     STIMER_ASSERT(id < hstimer.size);
     hstimer.ptasks[id].task_callback = task_callback;
 }
 
 /**
- * @brief get wait list table
+ * @brief Get wait list table
  * @param task_table task id buffer
  * @param time_table task expire buffer
  * @param size buffer size
@@ -412,8 +475,23 @@ void stimer_set_task_schedule_hook(void (*task_schedule_hook)(uint16_t id))
 }
 #endif
 
-void stimer_assert_handle(const char* FILE_NAME, uint32_t LINE_NAME)
+#if !!(STIMER_ASSERT_ENABLE)
+void stimer_set_assert_callback(void (*user_assert_callback)(const char *FILE_NAME, uint32_t LINE_NAME))
 {
+    hstimer.user_assert_callback = user_assert_callback;
+}
+#endif
+
+void stimer_assert_handle(const char *FILE_NAME, uint32_t LINE_NAME)
+{
+
+#if !!(STIMER_ASSERT_ENABLE)
+    if (hstimer.user_assert_callback != NULL)
+    {
+        hstimer.user_assert_callback(FILE_NAME, LINE_NAME);
+    }
+#endif
+
     while(1)
     {
         ;

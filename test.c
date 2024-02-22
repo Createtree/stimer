@@ -41,7 +41,7 @@ uint16_t repeat_table[] = {
 };
 
 #define task_function_template(NAME) \
-    void NAME(void *arg){\
+    void NAME(void const *arg){\
         static int cnt = 0;\
         printf("[%d]taskName:[" #NAME "] arg:[%X] cnt:[%d]\n", stimer_get_tick(), arg, ++cnt);\
     }
@@ -52,7 +52,7 @@ task_function_template(task2)
 task_function_template(task3)
 task_function_template(task4)
 
-void (*task_func_table[])(void *) = {
+stimer_pfunc_t task_func_table[] = {
      task0, task1, task2, task3, task4
 };
 
@@ -66,7 +66,7 @@ uint32_t time_table[TASK_SIZE];
 
 /* Start test value define */
 
-static void test_task_create(void(**taskTable)(void*), uint16_t *intervalTable, uint16_t *priorityTable, uint16_t *repeatTable, uint16_t tableSize)
+static void test_task_create(stimer_pfunc_t *taskTable, uint16_t *intervalTable, uint16_t *priorityTable, uint16_t *repeatTable, uint16_t tableSize)
 {
     for (size_t i = 0; i < tableSize; i++)
     {
@@ -103,7 +103,7 @@ static void test_task_scheduler(uint32_t startTime, uint32_t endTime, const uint
     
 }
 
-static void test_task_insert(void(**taskFuncTable)(void*), uint16_t tableSize)
+static void test_task_insert(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
 {
     assert(tableSize >= 2);
     uint16_t id0, id1;
@@ -128,7 +128,7 @@ static void test_task_insert(void(**taskFuncTable)(void*), uint16_t tableSize)
 
 }
 
-static void test_task_stop(void(**taskFuncTable)(void*), uint16_t tableSize)
+static void test_task_stop(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
 {
     assert(tableSize >= 2);
     uint16_t id0, id1;
@@ -150,6 +150,36 @@ static void test_task_stop(void(**taskFuncTable)(void*), uint16_t tableSize)
     EXPECT_EQ_INT(id0, run_task_result[0]);
     EXPECT_EQ_INT(id1, run_task_result[1]);
 
+}
+
+static void test_task_tick_overflow(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
+{
+    assert(tableSize >= 2);
+    uint16_t id0, id1;
+    stimer_set_waitCnt(0);
+    stimer_set_tick(STIMER_MAX_TIMETICK - 1);
+    run_task_cnt = 0;
+    /*  test case:
+            time : [max-1]  max  0  1  2  ...
+            task0:    0      -   0  -  -
+            task1:    -      -   1  -  -
+            convert to:
+            time : 0  1  2  3...
+            task0: 0  -  0  -
+            task1: -  -  1  -
+    */
+    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 2, 0);
+    id1 = stimer_create_task(taskFuncTable[1], 2, 0, 1, 0);
+    stimer_tick_increase();
+    stimer_serve();
+    stimer_tick_increase();
+    stimer_serve();
+    stimer_tick_increase();
+    stimer_serve();
+    EXPECT_EQ_INT(0, stiemr_get_waitCnt());
+    EXPECT_EQ_INT(id0, run_task_result[0]);
+    EXPECT_EQ_INT(id0, run_task_result[1]);
+    EXPECT_EQ_INT(id1, run_task_result[2]);
 }
 
 void task_run_start_hook(uint16_t id)
@@ -217,6 +247,8 @@ int main(int argc, char *argv[])
 
     test_task_insert(task_func_table, TASK_SIZE);
     test_task_stop(task_func_table, TASK_SIZE);
+    test_task_tick_overflow(task_func_table, TASK_SIZE);
+
     free(run_task_result);
     free(run_task_time);
 
