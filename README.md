@@ -42,34 +42,55 @@ void main()
     // other init ...
 
     /* [3] Create stimer task */
-    uint16_t stimer_create_task(void (*task_callback)(const void* arg),
-				stimer_time_t interval,
-				uint8_t priority,
-				uint16_t repetitions,
-				void *arg);
+    uint16_t task_id = 
+    stimer_create_task((stimer_pfunc_t) task_callback,
+                       (stimer_time_t) interval,
+                       (uint8_t) priority,
+                       (uint8_t) reserved);
+    // other task create ...
+
+    /* [4] Start stimer task */
+    void stimer_task_start((uint16_t) task_id,
+                           (uint16_t) repetitions,
+                           (void *) arg);
+  
+    // trips: the oneshot created task has already been started
+    uint16_t stimer_task_oneshot((stimer_pfunc_t) task_callback,
+                                 (stimer_time_t) interval,
+                                 (uint8_t) priority,
+                                 (void *) arg);
+    // other task start ...
+   
     /* main loop */
     while(1)
     {
-	/* [4] call serve function in loop*/
+	/* [5] call serve function in loop*/
         stimer_serve();
     }
 }
 
 void systick_interrupt_callback(void)
 {
-    /* [5] Get tick in systick or timer */
-    stimer_tick();
+    /* [6] Get tick in systick or timer */
+    stimer_tick_increase();
 }
 
 ```
 
 ## Update Log 更新日志
 
-### 2024.02.19
+### 2024.02.26
 
-- First create file
-- Complete basic functions
-- Add Unit Test
+- Split the task create and task start
+- Added reserved task
+- Added one shot task create
+- Added macro definition for tick/ms unit conversion
+- 将创建任务和开始任务进行拆分
+- 新增了保留任务功能
+- 新增了oneshot任务创建
+- 新增了tick/ms单位转换的宏定义
+
+---
 
 ### 2024.02.22
 
@@ -77,3 +98,11 @@ void systick_interrupt_callback(void)
 - Added user assertion callback
 - Fixed compiler warnings
 - Fixed timetick overflow issue
+
+---
+
+### 2024.02.19
+
+- First create file
+- Complete basic functions
+- Add Unit Test

@@ -73,8 +73,8 @@ static void test_task_create(stimer_pfunc_t *taskTable, uint16_t *intervalTable,
         stimer_create_task(taskTable[i],
                            intervalTable[i],
                            priorityTable[i],
-                           repeatTable[i],
-                           (void*)i);
+                           0);
+        stimer_task_start(i, repeatTable[i], (void*)i);
     }
     
     for (size_t i = 0; i < TASK_SIZE; i++)
@@ -103,6 +103,28 @@ static void test_task_scheduler(uint32_t startTime, uint32_t endTime, const uint
     
 }
 
+static void test_task_oneshot(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
+{
+    assert(tableSize >= 3);
+    uint16_t id0, id1, id2;
+    run_task_cnt = 0;
+    stimer_set_waitCnt(0);
+    stimer_set_tick(0);
+    id0 = stimer_task_oneshot(taskFuncTable[0], 1, 1, NULL);
+    id1 = stimer_task_oneshot(taskFuncTable[1], 1, 3, NULL);
+    id2 = stimer_task_oneshot(taskFuncTable[2], 1, 2, NULL);
+    stimer_tick_increase();
+    stimer_serve();
+    stimer_tick_increase();
+    stimer_serve();
+    stimer_tick_increase();
+    stimer_serve();
+    EXPECT_EQ_INT(run_task_cnt, 3);
+    EXPECT_EQ_INT(id1, run_task_result[0]);
+    EXPECT_EQ_INT(id2, run_task_result[1]);
+    EXPECT_EQ_INT(id0, run_task_result[2]);
+}
+
 static void test_task_insert(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
 {
     assert(tableSize >= 2);
@@ -112,10 +134,12 @@ static void test_task_insert(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
 
     run_task_cnt = 0;
     // insert task during timer serve phase
-    id0 = stimer_create_task(taskFuncTable[0], 1, 0, 2, 0);
+    id0 = stimer_create_task(taskFuncTable[0], 1, 0, 0);
+    stimer_task_start(id0, 2, NULL);
     stimer_set_tick(stimer_get_nextExpire());
     stimer_serve();
-    id1 = stimer_create_task(taskFuncTable[1], 1, 1, 1, 0);
+    id1 = stimer_create_task(taskFuncTable[1], 1, 1, 0);
+    stimer_task_start(id1, 1, NULL);
     stimer_set_tick(stimer_get_nextExpire());
     stimer_serve();
     stimer_set_tick(stimer_get_nextExpire());
@@ -136,14 +160,17 @@ static void test_task_stop(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
     stimer_set_tick(0);
     run_task_cnt = 0;
     // stop task during timer serve phase
-    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 2, 0);
+    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 0);
+    stimer_task_start(id0, 2, NULL);
     stimer_set_tick(stimer_get_nextExpire());
     stimer_serve();
-    id1 = stimer_create_task(taskFuncTable[1], 1, 0, 1, 0);
+    id1 = stimer_create_task(taskFuncTable[1], 1, 0, 0);
+    stimer_task_start(id0, 1, NULL);
     stimer_task_stop(id0);
     stimer_set_tick(stimer_get_nextExpire());
     stimer_serve();
-    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 2, 0);
+    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 0);
+    stimer_task_start(id0, 2, NULL);
     stimer_task_stop(id0);
 
     EXPECT_EQ_INT(0, stiemr_get_waitCnt());
@@ -168,8 +195,10 @@ static void test_task_tick_overflow(stimer_pfunc_t *taskFuncTable, uint16_t tabl
             task0: 0  -  0  -
             task1: -  -  1  -
     */
-    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 2, 0);
-    id1 = stimer_create_task(taskFuncTable[1], 2, 0, 1, 0);
+    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 0);
+    stimer_task_start(id0, 2, NULL);
+    id1 = stimer_create_task(taskFuncTable[1], 2, 0, 0);
+    stimer_task_start(id1, 1, NULL);
     stimer_tick_increase();
     stimer_serve();
     stimer_tick_increase();
@@ -180,6 +209,41 @@ static void test_task_tick_overflow(stimer_pfunc_t *taskFuncTable, uint16_t tabl
     EXPECT_EQ_INT(id0, run_task_result[0]);
     EXPECT_EQ_INT(id0, run_task_result[1]);
     EXPECT_EQ_INT(id1, run_task_result[2]);
+}
+
+static void test_task_preserve(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
+{
+    assert(tableSize >= 1);
+    uint16_t id0, id1;
+    stimer_set_waitCnt(0);
+    stimer_set_tick(0);
+    run_task_cnt = 0;
+
+    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 1);
+    stimer_task_start(id0, 1, NULL);
+    stimer_set_tick(stimer_get_nextExpire());
+    stimer_serve();
+    stimer_serve();
+    EXPECT_EQ_PTR(taskFuncTable[0], stimer_get_task(id0)->task_callback);
+}
+
+static void test_task_repete(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
+{
+    assert(tableSize >= 1);
+    uint16_t id0, id1;
+    int i = tableSize;
+    stimer_set_waitCnt(0);
+    stimer_set_tick(0);
+    run_task_cnt = 0;
+
+    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 0);
+    stimer_task_start(id0, STIMER_TASK_LOOP, NULL);
+    while (i--)
+    {
+        stimer_set_tick(stimer_get_nextExpire());
+        stimer_serve();
+    }
+    EXPECT_EQ_INT(tableSize, run_task_cnt);
 }
 
 void task_run_start_hook(uint16_t id)
@@ -245,10 +309,12 @@ int main(int argc, char *argv[])
                         expect_time_table,
                         run_task_size);
 
+    test_task_oneshot(task_func_table, TASK_SIZE);
     test_task_insert(task_func_table, TASK_SIZE);
     test_task_stop(task_func_table, TASK_SIZE);
     test_task_tick_overflow(task_func_table, TASK_SIZE);
-
+    test_task_preserve(task_func_table, TASK_SIZE);
+    test_task_repete(task_func_table, TASK_SIZE);
     free(run_task_result);
     free(run_task_time);
 
