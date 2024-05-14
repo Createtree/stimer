@@ -111,6 +111,11 @@ void stimer_task_start(uint16_t id, uint16_t repetitions, void *arg)
     stimer_scheduler(id);
 }
 
+uint16_t stimer_find_taskid(uint16_t id)
+{
+
+}
+
 void stimer_scheduler(uint16_t id)
 {
     STIMER_ASSERT(id < hstimer.size);
@@ -238,16 +243,12 @@ void stimer_task_stop(uint16_t id)
 
     uint32_t i;
     stimer_task_t *ptask = &hstimer.ptasks[hstimer.wait_id];
-    if (hstimer.ptasks[id].reserved == 0)
-    {
-        hstimer.ptasks[id].task_callback = NULL;
-        hstimer.ptasks[id].repetitions = 0;
-        hstimer.ptasks[id].reserved = 0;
-    }
-    if (id == hstimer.wait_id)
+    int flag = 0;
+    if (id == hstimer.wait_id && hstimer.wait_cnt > 0)
     {
         hstimer.wait_id = ptask->next_id;
         hstimer.wait_cnt--;
+        flag = 1;
     }
     else
     {
@@ -257,10 +258,17 @@ void stimer_task_stop(uint16_t id)
             {
                 ptask->next_id = hstimer.ptasks[id].next_id;
                 hstimer.wait_cnt--;
+                flag = 1;
                 break;
             }
             ptask = &hstimer.ptasks[ptask->next_id];
         }
+    }
+    if (hstimer.ptasks[id].reserved == 0 && flag == 1)
+    {
+        hstimer.ptasks[id].task_callback = NULL;
+        hstimer.ptasks[id].repetitions = 0;
+        hstimer.ptasks[id].reserved = 0;
     }
 }
 
@@ -356,11 +364,11 @@ uint16_t stimer_get_resetCnt(void)
 }
 
 /**
- * @brief Get a wait task
+ * @brief Using ID to find waiting task
  * @param id task id
  * @retval stimer_task_t* task handle
  */
-stimer_task_t *stimer_get_task(uint16_t id)
+stimer_task_t *stimer_find_waitTask(uint16_t id)
 {
     STIMER_ASSERT(id < hstimer.size);
     uint16_t i;

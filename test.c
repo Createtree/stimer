@@ -158,24 +158,36 @@ static void test_task_stop(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
     uint16_t id0, id1;
     stimer_set_waitCnt(0);
     stimer_set_tick(0);
+    memset(run_task_result, 0xFA, sizeof(run_task_result));
     run_task_cnt = 0;
     // stop task during timer serve phase
     id0 = stimer_create_task(taskFuncTable[0], 1, 1, 0);
     stimer_task_start(id0, 2, NULL);
     stimer_set_tick(stimer_get_nextExpire());
-    stimer_serve();
+    stimer_serve(); // run id0 task
     id1 = stimer_create_task(taskFuncTable[1], 1, 0, 0);
-    stimer_task_start(id0, 1, NULL);
-    stimer_task_stop(id0);
+    stimer_task_start(id1, 2, NULL);
+    stimer_task_stop(id0); // stop id0 (repetition = 1)
     stimer_set_tick(stimer_get_nextExpire());
-    stimer_serve();
-    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 0);
-    stimer_task_start(id0, 2, NULL);
-    stimer_task_stop(id0);
+    stimer_serve(); // run id1 task
+    stimer_task_stop(id1);
 
     EXPECT_EQ_INT(0, stiemr_get_waitCnt());
     EXPECT_EQ_INT(id0, run_task_result[0]);
     EXPECT_EQ_INT(id1, run_task_result[1]);
+
+    // The situation where the testing task has not yet been started
+    hstimer.wait_id = 0;
+    id0 = stimer_create_task(taskFuncTable[0], 1, 1, 1);
+    stimer_task_stop(id0);
+    EXPECT_EQ_PTR(hstimer.ptasks[id0].task_callback , taskFuncTable[0]);
+    stimer_task_start(id0, 2, NULL);
+    EXPECT_EQ_PTR(&hstimer.ptasks[id0], stimer_find_waitTask(id0));
+    stimer_set_tick(stimer_get_nextExpire());
+    stimer_serve();
+    stimer_task_set_reserved(id0, 0);
+    stimer_task_stop(id0);
+
 
 }
 
@@ -224,7 +236,7 @@ static void test_task_preserve(stimer_pfunc_t *taskFuncTable, uint16_t tableSize
     stimer_set_tick(stimer_get_nextExpire());
     stimer_serve();
     stimer_serve();
-    EXPECT_EQ_PTR(taskFuncTable[0], stimer_get_task(id0)->task_callback);
+    EXPECT_EQ_PTR(taskFuncTable[0], stimer_find_waitTask(id0)->task_callback);
 }
 
 static void test_task_repete(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)

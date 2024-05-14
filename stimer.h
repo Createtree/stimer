@@ -20,6 +20,7 @@
   *  2024.01.29       liuzhihua                  Create file          
   *  2024.02.22       liuzhihua                Add and modify     
   *  2024.02.27       liuzhihua                Add and modify
+  *  2024.05.14       liuzhihua         fixed "stimer_task_stop" bugs
 ***/
 
 #ifndef STIMER_H_
@@ -145,7 +146,7 @@ uint16_t stiemr_get_waitCnt(void);
 uint16_t stimer_get_waitID(void);
 stimer_time_t stimer_get_nextExpire(void);
 uint16_t stimer_get_resetCnt(void);
-stimer_task_t *stimer_get_task(uint16_t id);
+stimer_task_t *stimer_find_waitTask(uint16_t id);
 uint16_t stimer_get_wait_table(uint16_t* task_table, stimer_time_t* time_table, uint16_t size);
 
 stimer_time_t stimer_task_get_interval(uint16_t id);
