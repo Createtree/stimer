@@ -5,9 +5,9 @@
 /*----------------------------------------------------------------------
   - File name     : stimer.h
   - Author        : liuzhihua (liuzhihuawy@163.com)
-  - Update date   : 2024.02.27
+  - Update date   : 2024.05.14
   -	Brief         : software timer
-  - Version       : v0.3
+  - Version       : v0.4
 -----------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------
 |                               UPDATE NOTE                             |
@@ -21,26 +21,17 @@
   *  2024.02.22       liuzhihua                Add and modify     
   *  2024.02.27       liuzhihua                Add and modify
   *  2024.05.14       liuzhihua         fixed "stimer_task_stop" bugs
+  *  2024.05.16       liuzhihua                add and modify
 ***/
 
 #ifndef STIMER_H_
 #define STIMER_H_
 
+
 /*-----------------------------------------------------------------------
 |                               INCLUDES                                |
 -----------------------------------------------------------------------*/
 #include <stdint.h>
-
-#if !!(STIMER_ASSERT_ENABLE)
-#define STIMER_ASSERT(x)
-#else
-// #include <assert.h>
-// #define STIMER_ASSERT(x) assert(x)
-void stimer_assert_handle(const char *file_name, uint32_t file_line);
-#define STIMER_ASSERT(_Expression) (void) \
-((!!(_Expression)) || \
-(stimer_assert_handle(__FILE__,__LINE__),0))
-#endif
 
 #ifdef  __cplusplus
     extern "C" {
@@ -48,19 +39,48 @@ void stimer_assert_handle(const char *file_name, uint32_t file_line);
 /*-----------------------------------------------------------------------
 |                                DEFINES                                |
 -----------------------------------------------------------------------*/
-/* User config start*/
-#define STIMER_TICK_PER_MS            (1)
-#define STIMER_ASSERT_ENABLE          (1)
-#define STIMER_TASK_ARG_ENABLE        (1)
-#define STIMER_TASK_HOOK_ENABLE       (1)
-#define STIMER_MAX_REPETITIONS_BIT    (11)
-#define STIMER_MAX_PRIORITY_BIT       (4)
 
-/* User config end */
+/************ User config start ************/
+
+// Timer tick per millisecond
+#define STIMER_TICK_PER_MS            (1)
+// Using assert [0:disable] [1:c std assert]
+//              [2:assert with handle] [3:assert with while(1)]
+#define STIMER_ASSERT_ENABLE          (3)
+// Using task args [0:disable, 1:enable]
+#define STIMER_TASK_ARG_ENABLE        (1)
+// Using task hook [0:disable, 1:enable]
+#define STIMER_TASK_HOOK_ENABLE       (1)
+// Using task repetitions bits [1~11]
+#define STIMER_MAX_REPETITIONS_BIT    (11)
+// Using task priority bits [1~4]
+#define STIMER_MAX_PRIORITY_BIT       (4)
+// Task Critical section start [example:__disable_irq()]
+extern void __disable_irq(void);
+#define STIMER_DISABLE_INTERRUPTS()   __disable_irq()
+// Task Critical section end [example:__enable_irq()]
+extern void __enable_irq(void);
+#define STIMER_ENABLE_INTERRUPTS()    __enable_irq()
+
+/************ User config end ************/
+
+#if !!(STIMER_ASSERT_ENABLE)
+#define STIMER_ASSERT(x)
+#elif ((STIMER_ASSERT_ENABLE) == 1)
+#include <assert.h>
+#define STIMER_ASSERT(x) assert(x)
+#elif ((STIMER_ASSERT_ENABLE) == 2)
+void stimer_assert_handle(const char *file_name, uint32_t file_line);
+#define STIMER_ASSERT(_Expression) (void) \
+((!!(_Expression)) || \
+(stimer_assert_handle(__FILE__,__LINE__),0))
+#elif ((STIMER_ASSERT_ENABLE) == 3)
+#define STIMER_ASSERT(_Expression)  if(!(_Expression))while(1);
+#endif
 
 #define STIMER_MAX_REPETITIONS ((1 << STIMER_MAX_REPETITIONS_BIT) - 1)
 #define STIMER_MAX_PRIORITY ((1 << STIMER_MAX_PRIORITY_BIT) - 1)
-#define STIMER_MAX_TIMETICK ((((1ULL << (sizeof(stimer_time_t)*8) - 1) - 1) << 1) + 1)
+#define STIMER_MAX_TIMETICK ((((1ULL << ((sizeof(stimer_time_t)*8) - 1)) - 1) << 1) + 1)
 #define STIMER_TASK_LOOP STIMER_MAX_REPETITIONS
 
 typedef uint32_t stimer_time_t;
@@ -119,7 +139,7 @@ struct stimer_task_structure_type
 /**
  * @brief convert ticks to ms
  */
-#define STIMER_TICK_TO_MS(tick)  (tick/STIMER_TICK_PER_MS)
+#define STIMER_TICK_TO_MS(tick)  ((double)tick/STIMER_TICK_PER_MS)
 /**
  * @brief convert ms to ticks
  */
@@ -131,7 +151,6 @@ extern stimer_t hstimer;
 -----------------------------------------------------------------------*/
 void stimer_init(stimer_task_t *pTasks, uint16_t Size);
 uint16_t stimer_create_task(stimer_pfunc_t task_callback, stimer_time_t interval, uint8_t priority, uint8_t reserved);
-void stimer_scheduler(uint16_t id);
 void stimer_task_start(uint16_t id, uint16_t repetitions, void *arg);
 void stimer_task_delay_start(uint16_t id, uint16_t repetitions, void *arg, stimer_time_t delay);
 uint16_t stimer_task_oneshot(stimer_pfunc_t task_callback, stimer_time_t interval, uint8_t priority, void *arg);
@@ -139,7 +158,6 @@ uint16_t stimer_task_oneshot(stimer_pfunc_t task_callback, stimer_time_t interva
 void stimer_serve(void);
 void stimer_tick_increase(void);
 void stimer_task_stop(uint16_t id);
-void stimer_reset(void);
 
 stimer_time_t stimer_get_tick(void);
 uint16_t stiemr_get_waitCnt(void);

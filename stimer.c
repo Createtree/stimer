@@ -1,14 +1,14 @@
 #include "stimer.h"
 #include <string.h>
 
-#define NEXT_TASK_ID(id) hstimer.ptasks[(id)].next_id
+static void stimer_reset(void);
+static void stimer_scheduler(uint16_t id);
 stimer_t hstimer;
 
 void stimer_init(stimer_task_t *pTasks, uint16_t Size)
 {
     STIMER_ASSERT(pTasks != NULL);
     STIMER_ASSERT(Size != 0);
-
     memset(pTasks, 0, sizeof(stimer_task_t) * Size);
     hstimer.ptasks = pTasks;
     hstimer.size = Size;
@@ -33,31 +33,31 @@ void stimer_init(stimer_task_t *pTasks, uint16_t Size)
  * @param interval task interval
  * @param priority task priority
  * @param reserved task will be saved unless manually deleted
- * @retval uint16_t task ID
+ * @retval uint16_t task ID [< hstimer.size : ok], [>= hstimer.size : fail]
  * @note Use the function after stimer_init()
  */
 uint16_t stimer_create_task(stimer_pfunc_t task_callback, stimer_time_t interval, uint8_t priority, uint8_t reserved)
 {
     STIMER_ASSERT(task_callback != NULL);
     STIMER_ASSERT(priority <= STIMER_MAX_PRIORITY);
-    STIMER_ASSERT(hstimer.wait_cnt < hstimer.size);
 
     uint32_t i;
+    STIMER_DISABLE_INTERRUPTS();
     /* 查找空闲的任务槽位 */
     for (i = 0; i < hstimer.size; i++)
     {
-        if (hstimer.ptasks[i].task_callback != NULL || hstimer.ptasks[i].reserved)
+        if (hstimer.ptasks[i].task_callback == NULL && hstimer.ptasks[i].reserved == 0)
         {
-            continue;
+            /* 写入任务参数 */
+            hstimer.ptasks[i].task_callback = task_callback;
+            hstimer.ptasks[i].interval = interval;
+            hstimer.ptasks[i].priority = priority;
+            hstimer.ptasks[i].reserved = reserved ? 1 : 0;
+            hstimer.ptasks[i].repetitions = 0;
+            break;
         }
-        break;
     }
-    /* 写入任务参数 */
-    hstimer.ptasks[i].task_callback = task_callback;
-    hstimer.ptasks[i].interval = interval;
-    hstimer.ptasks[i].priority = priority;
-    hstimer.ptasks[i].reserved = reserved ? 1 : 0;
-    hstimer.ptasks[i].repetitions = 0;
+    STIMER_ENABLE_INTERRUPTS();
     return i;
 }
 
@@ -67,13 +67,45 @@ uint16_t stimer_create_task(stimer_pfunc_t task_callback, stimer_time_t interval
  * @param interval time interval
  * @param priority task priority
  * @param arg task argument
- * @retval uint16_t task id
+ * @retval uint16_t task id [< hstimer.size : ok], [>= hstimer.size : fail]
+ * @note The same callback function will update the configuration of the task
  */
 uint16_t stimer_task_oneshot(stimer_pfunc_t task_callback, stimer_time_t interval, uint8_t priority, void *arg)
 {
-    uint16_t id = stimer_create_task(task_callback, interval, priority, 0);
-    stimer_task_start(id, 1, arg);
-    return id;
+    uint16_t id, i;
+    STIMER_DISABLE_INTERRUPTS();
+    id = hstimer.wait_id;
+    /* 寻找相同回调函数的任务 */
+    for (i = 0; i < hstimer.wait_cnt; i++)
+    {
+        if (hstimer.ptasks[id].task_callback == task_callback && hstimer.ptasks[id].reserved == 0)
+        {
+            /* 更新任务配置 */
+            hstimer.ptasks[id].interval = interval;
+            hstimer.ptasks[id].priority = priority;
+            hstimer.ptasks[id].repetitions = 1;
+            #if !!(STIMER_TASK_ARG_ENABLE)
+            {
+                hstimer.ptasks[id].arg = arg;
+            }
+            #endif
+            stimer_scheduler(id);
+        }
+        id = hstimer.ptasks[id].next_id;
+    }
+    STIMER_ENABLE_INTERRUPTS();
+    if (id < hstimer.wait_cnt)
+    {
+        return id;
+    }
+    /* 没有该回调函数的任务，重新开启一个任务 */
+    id = stimer_create_task(task_callback, interval, priority, 0);
+    if (id < hstimer.size)
+    {
+        stimer_task_start(id, 1, arg);
+        return id;
+    }
+    return hstimer.size;
 }
 
 /**
@@ -102,21 +134,17 @@ void stimer_task_start(uint16_t id, uint16_t repetitions, void *arg)
     STIMER_ASSERT(id < hstimer.size);
     STIMER_ASSERT(repetitions <= STIMER_MAX_REPETITIONS);
     STIMER_ASSERT(hstimer.ptasks[id].task_callback != NULL);
-
+    STIMER_DISABLE_INTERRUPTS();
     hstimer.ptasks[id].repetitions = repetitions;
     #if !!(STIMER_TASK_ARG_ENABLE)
         hstimer.ptasks[id].arg = arg;
     #endif
     /* 将任务加入到等待队列 */
     stimer_scheduler(id);
+    STIMER_ENABLE_INTERRUPTS();
 }
 
-uint16_t stimer_find_taskid(uint16_t id)
-{
-
-}
-
-void stimer_scheduler(uint16_t id)
+static void stimer_scheduler(uint16_t id)
 {
     STIMER_ASSERT(id < hstimer.size);
     uint32_t i, min, lmin;
@@ -206,7 +234,7 @@ void stimer_tick_increase(void)
     hstimer.timetick++;
 }
 
-void stimer_reset(void)
+static void stimer_reset(void)
 {
     stimer_time_t tick = hstimer.timetick;
     uint16_t i;
@@ -219,10 +247,12 @@ void stimer_reset(void)
         {
             if (ptask->expire > tick)
             {
+                // 还未到期的任务
                 ptask->expire -= tick;
             }
             else
             {
+                // 已到期的任务
                 ptask->expire = 0;
             }
             ptask = &hstimer.ptasks[ptask->next_id];
@@ -244,6 +274,7 @@ void stimer_task_stop(uint16_t id)
     uint32_t i;
     stimer_task_t *ptask = &hstimer.ptasks[hstimer.wait_id];
     int flag = 0;
+    STIMER_DISABLE_INTERRUPTS();
     if (id == hstimer.wait_id && hstimer.wait_cnt > 0)
     {
         hstimer.wait_id = ptask->next_id;
@@ -270,6 +301,7 @@ void stimer_task_stop(uint16_t id)
         hstimer.ptasks[id].repetitions = 0;
         hstimer.ptasks[id].reserved = 0;
     }
+    STIMER_ENABLE_INTERRUPTS();
 }
 
 /**
@@ -317,7 +349,9 @@ void stimer_serve(void)
         /* 重新调度该任务 */
         if (ptask->repetitions > 0)
         {
+            STIMER_DISABLE_INTERRUPTS();
             stimer_scheduler(hstimer.wait_id);
+            STIMER_ENABLE_INTERRUPTS();
         }
         else
         {

@@ -106,13 +106,15 @@ static void test_task_scheduler(uint32_t startTime, uint32_t endTime, const uint
 static void test_task_oneshot(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
 {
     assert(tableSize >= 3);
-    uint16_t id0, id1, id2;
+    uint16_t id0, id1, id2, id3;
     run_task_cnt = 0;
+    memset(run_task_result, 0xFA, sizeof(run_task_result));
     stimer_set_waitCnt(0);
     stimer_set_tick(0);
     id0 = stimer_task_oneshot(taskFuncTable[0], 1, 1, NULL);
-    id1 = stimer_task_oneshot(taskFuncTable[1], 1, 3, NULL);
-    id2 = stimer_task_oneshot(taskFuncTable[2], 1, 2, NULL);
+    id1 = stimer_task_oneshot(taskFuncTable[1], 1, 2, NULL);
+    id2 = stimer_task_oneshot(taskFuncTable[2], 1, 3, NULL);
+    id3 = stimer_task_oneshot(taskFuncTable[2], 2, 3, NULL);
     stimer_tick_increase();
     stimer_serve();
     stimer_tick_increase();
@@ -121,8 +123,9 @@ static void test_task_oneshot(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
     stimer_serve();
     EXPECT_EQ_INT(run_task_cnt, 3);
     EXPECT_EQ_INT(id1, run_task_result[0]);
-    EXPECT_EQ_INT(id2, run_task_result[1]);
-    EXPECT_EQ_INT(id0, run_task_result[2]);
+    EXPECT_EQ_INT(id0, run_task_result[1]);
+    EXPECT_EQ_INT(id2, run_task_result[2]);
+    EXPECT_EQ_INT(id2, id3);
 }
 
 static void test_task_insert(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
@@ -258,6 +261,16 @@ static void test_task_repete(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
     EXPECT_EQ_INT(tableSize, run_task_cnt);
 }
 
+int critical_counter = 0;
+void __disable_irq(void)
+{
+    critical_counter++;
+}
+void __enable_irq(void)
+{
+    critical_counter--;
+}
+
 void task_run_start_hook(uint16_t id)
 {
     run_task_result[run_task_cnt] = id;
@@ -320,13 +333,20 @@ int main(int argc, char *argv[])
                         expect_id_table,
                         expect_time_table,
                         run_task_size);
-
+    EXPECT_EQ_INT(0, critical_counter);
     test_task_oneshot(task_func_table, TASK_SIZE);
+    EXPECT_EQ_INT(0, critical_counter);
     test_task_insert(task_func_table, TASK_SIZE);
+    EXPECT_EQ_INT(0, critical_counter);
     test_task_stop(task_func_table, TASK_SIZE);
+    EXPECT_EQ_INT(0, critical_counter);
     test_task_tick_overflow(task_func_table, TASK_SIZE);
+    EXPECT_EQ_INT(0, critical_counter);
     test_task_preserve(task_func_table, TASK_SIZE);
+    EXPECT_EQ_INT(0, critical_counter);
     test_task_repete(task_func_table, TASK_SIZE);
+    EXPECT_EQ_INT(0, critical_counter);
+
     free(run_task_result);
     free(run_task_time);
 
