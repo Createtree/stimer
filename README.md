@@ -113,6 +113,11 @@ void systick_interrupt_callback(void)
 
 ## Update Log 更新日志
 
+### 2024.05.28
+
+- fixed `stimer_task_oneshot` bugs
+- 修复 `stimer_task_oneshot` 中的错误
+
 ### 2024.05.16
 
 - Add macro configuration for critical state protection

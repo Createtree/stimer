@@ -5,9 +5,9 @@
 /*----------------------------------------------------------------------
   - File name     : stimer.h
   - Author        : liuzhihua (liuzhihuawy@163.com)
-  - Update date   : 2024.05.14
+  - Update date   : 2024.05.28
   -	Brief         : software timer
-  - Version       : v0.4
+  - Version       : v0.5
 -----------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------
 |                               UPDATE NOTE                             |
@@ -22,6 +22,7 @@
   *  2024.02.27       liuzhihua                Add and modify
   *  2024.05.14       liuzhihua         fixed "stimer_task_stop" bugs
   *  2024.05.16       liuzhihua                add and modify
+  *  2024.05.28       liuzhihua       fixed "stimer_task_oneshot" bugs
 ***/
 
 #ifndef STIMER_H_

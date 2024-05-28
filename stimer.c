@@ -72,7 +72,7 @@ uint16_t stimer_create_task(stimer_pfunc_t task_callback, stimer_time_t interval
  */
 uint16_t stimer_task_oneshot(stimer_pfunc_t task_callback, stimer_time_t interval, uint8_t priority, void *arg)
 {
-    uint16_t id, i;
+    uint16_t id, i, flag = 0;
     STIMER_DISABLE_INTERRUPTS();
     id = hstimer.wait_id;
     /* 寻找相同回调函数的任务 */
@@ -90,11 +90,13 @@ uint16_t stimer_task_oneshot(stimer_pfunc_t task_callback, stimer_time_t interva
             }
             #endif
             stimer_scheduler(id);
+			flag = 1;
+            break;
         }
         id = hstimer.ptasks[id].next_id;
     }
     STIMER_ENABLE_INTERRUPTS();
-    if (id < hstimer.wait_cnt)
+    if (flag == 1)
     {
         return id;
     }
