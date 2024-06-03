@@ -5,9 +5,9 @@
 /*----------------------------------------------------------------------
   - File name     : stimer.h
   - Author        : liuzhihua (liuzhihuawy@163.com)
-  - Update date   : 2024.05.28
+  - Update date   : 2024.06.03
   -	Brief         : software timer
-  - Version       : v0.5
+  - Version       : v0.6
 -----------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------
 |                               UPDATE NOTE                             |
@@ -23,6 +23,7 @@
   *  2024.05.14       liuzhihua         fixed "stimer_task_stop" bugs
   *  2024.05.16       liuzhihua                add and modify
   *  2024.05.28       liuzhihua       fixed "stimer_task_oneshot" bugs
+  *  2024.06.03       liuzhihua         fixed multiple schedules bugs
 ***/
 
 #ifndef STIMER_H_
@@ -92,6 +93,7 @@ typedef void (*stimer_pfunc_t)(const void * arg);
 struct stimer_structure_type
 {
     stimer_task_t *ptasks;   // 任务列表指针
+    stimer_task_t *ptask;    // 当前执行的任务
     uint16_t size;           // 任务列表总长度
     uint16_t wait_cnt;       // 等待列表的任务量
     uint16_t wait_id;        // 等待中的任务id

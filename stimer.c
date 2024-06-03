@@ -10,6 +10,7 @@ void stimer_init(stimer_task_t *pTasks, uint16_t Size)
     STIMER_ASSERT(pTasks != NULL);
     STIMER_ASSERT(Size != 0);
     memset(pTasks, 0, sizeof(stimer_task_t) * Size);
+    hstimer.ptask = NULL;
     hstimer.ptasks = pTasks;
     hstimer.size = Size;
     hstimer.timetick = 0;
@@ -89,7 +90,11 @@ uint16_t stimer_task_oneshot(stimer_pfunc_t task_callback, stimer_time_t interva
                 hstimer.ptasks[id].arg = arg;
             }
             #endif
-            stimer_scheduler(id);
+             /* 如果当前任务在运行，运行完成后再进行调度 */
+            if (hstimer.ptask != &hstimer.ptasks[id])
+            {
+                stimer_scheduler(id);
+            }
 			flag = 1;
             break;
         }
@@ -142,7 +147,11 @@ void stimer_task_start(uint16_t id, uint16_t repetitions, void *arg)
         hstimer.ptasks[id].arg = arg;
     #endif
     /* 将任务加入到等待队列 */
-    stimer_scheduler(id);
+    /* 如果当前任务在运行，运行完成后再进行调度 */
+    if (hstimer.ptask != &hstimer.ptasks[id])
+    {
+        stimer_scheduler(id);
+    }
     STIMER_ENABLE_INTERRUPTS();
 }
 
@@ -312,17 +321,16 @@ void stimer_task_stop(uint16_t id)
  */
 void stimer_serve(void)
 {
-    stimer_task_t *ptask;
     /* 判断任务是否到期 */
     while (hstimer.wait_cnt && hstimer.ptasks[hstimer.wait_id].expire <= hstimer.timetick)
     {
         STIMER_ASSERT(hstimer.wait_id < hstimer.size);
         STIMER_ASSERT(hstimer.ptasks[hstimer.wait_id].repetitions > 0);
         STIMER_ASSERT(hstimer.ptasks[hstimer.wait_id].task_callback != NULL);
-        ptask = &hstimer.ptasks[hstimer.wait_id];
-        if (STIMER_TASK_LOOP != ptask->repetitions)
+        hstimer.ptask = &hstimer.ptasks[hstimer.wait_id];
+        if (STIMER_TASK_LOOP != hstimer.ptask->repetitions)
         {
-            ptask->repetitions--;
+            hstimer.ptask->repetitions--;
         }
 
         /* 执行任务开始钩子 */
@@ -335,9 +343,9 @@ void stimer_serve(void)
 
         /* 对定时任务进行回调 */
         #if !!(STIMER_TASK_ARG_ENABLE)
-        ptask->task_callback(ptask->arg);
+        hstimer.ptask->task_callback(hstimer.ptask->arg);
         #else
-        ptask->task_callback((void*)0);
+        hstimer.ptask->task_callback((void*)0);
         #endif
 
         /* 执行任务结束钩子 */
@@ -349,7 +357,7 @@ void stimer_serve(void)
         #endif
 
         /* 重新调度该任务 */
-        if (ptask->repetitions > 0)
+        if (hstimer.ptask->repetitions > 0)
         {
             STIMER_DISABLE_INTERRUPTS();
             stimer_scheduler(hstimer.wait_id);
@@ -365,6 +373,7 @@ void stimer_serve(void)
             #endif
             stimer_task_stop(hstimer.wait_id);
         }
+        hstimer.ptask = NULL;
     }
 }
 
