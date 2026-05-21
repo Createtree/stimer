@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <windows.h>
 #include <assert.h>
 #include "stimer.h"
@@ -108,7 +109,7 @@ static void test_task_oneshot(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
     assert(tableSize >= 3);
     uint16_t id0, id1, id2, id3;
     run_task_cnt = 0;
-    memset(run_task_result, 0xFA, sizeof(run_task_result));
+    memset(run_task_result, 0xFA, sizeof(*run_task_result) * run_task_size);
     stimer_set_waitCnt(0);
     stimer_set_tick(0);
     id0 = stimer_task_oneshot(taskFuncTable[0], 1, 1, NULL);
@@ -161,7 +162,7 @@ static void test_task_stop(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
     uint16_t id0, id1;
     stimer_set_waitCnt(0);
     stimer_set_tick(0);
-    memset(run_task_result, 0xFA, sizeof(run_task_result));
+    memset(run_task_result, 0xFA, sizeof(*run_task_result) * run_task_size);
     run_task_cnt = 0;
     // stop task during timer serve phase
     id0 = stimer_create_task(taskFuncTable[0], 1, 1, 0);
@@ -323,7 +324,7 @@ int main(int argc, char *argv[])
                      repeat_table, 
                      TASK_SIZE);
 
-    run_task_result = malloc(sizeof(void*) * run_task_size);
+    run_task_result = malloc(sizeof(*run_task_result) * run_task_size);
     run_task_time = malloc(sizeof(stimer_time_t) * run_task_size);
     run_task_cnt = 0;
     uint16_t expect_id_table[] = {4, 0, 4, 1, 0, 4, 2, 4, 3, 1, 4, 4, 2, 4, 4, 3};

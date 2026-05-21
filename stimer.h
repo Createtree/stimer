@@ -5,9 +5,9 @@
 /*----------------------------------------------------------------------
   - File name     : stimer.h
   - Author        : liuzhihua (liuzhihuawy@163.com)
-  - Update date   : 2024.06.03
+  - Update date   : 2026.05.21
   -	Brief         : software timer
-  - Version       : v0.6
+  - Version       : v0.7
 -----------------------------------------------------------------------*/
 /*-----------------------------------------------------------------------
 |                               UPDATE NOTE                             |
@@ -24,6 +24,7 @@
   *  2024.05.16       liuzhihua                add and modify
   *  2024.05.28       liuzhihua       fixed "stimer_task_oneshot" bugs
   *  2024.06.03       liuzhihua         fixed multiple schedules bugs
+  *  2026.05.21       liuzhihua       fixed assert, scheduling, and warnings
 ***/
 
 #ifndef STIMER_H_
@@ -66,7 +67,7 @@ extern void __enable_irq(void);
 
 /************ User config end ************/
 
-#if !!(STIMER_ASSERT_ENABLE)
+#if ((STIMER_ASSERT_ENABLE) == 0)
 #define STIMER_ASSERT(x)
 #elif ((STIMER_ASSERT_ENABLE) == 1)
 #include <assert.h>
@@ -77,7 +78,16 @@ void stimer_assert_handle(const char *file_name, uint32_t file_line);
 ((!!(_Expression)) || \
 (stimer_assert_handle(__FILE__,__LINE__),0))
 #elif ((STIMER_ASSERT_ENABLE) == 3)
-#define STIMER_ASSERT(_Expression)  if(!(_Expression))while(1);
+#define STIMER_ASSERT(_Expression) \
+do { \
+    if (!(_Expression)) { \
+        while (1) { \
+            ; \
+        } \
+    } \
+} while (0)
+#else
+#error "Unsupported STIMER_ASSERT_ENABLE value"
 #endif
 
 #define STIMER_MAX_REPETITIONS ((1 << STIMER_MAX_REPETITIONS_BIT) - 1)
@@ -138,7 +148,7 @@ struct stimer_task_structure_type
  * @retval stimer_task_t* timer task handle
  * @note Using in callback tasks
  */
-#define STIMER_SELF_TASK hstimer.task_table[hstimer.wait_id]
+#define STIMER_SELF_TASK (&hstimer.ptasks[hstimer.wait_id])
 /**
  * @brief convert ticks to ms
  */

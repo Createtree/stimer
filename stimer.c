@@ -160,6 +160,7 @@ static void stimer_scheduler(uint16_t id)
     STIMER_ASSERT(id < hstimer.size);
     uint32_t i, min, lmin;
     min = hstimer.wait_id;
+    lmin = hstimer.wait_id;
     if (hstimer.ptasks[id].repetitions == 0) return;
     /* 计算到期时间 */
     if (STIMER_MAX_TIMETICK - hstimer.timetick < hstimer.ptasks[id].interval)
@@ -324,10 +325,11 @@ void stimer_serve(void)
     /* 判断任务是否到期 */
     while (hstimer.wait_cnt && hstimer.ptasks[hstimer.wait_id].expire <= hstimer.timetick)
     {
-        STIMER_ASSERT(hstimer.wait_id < hstimer.size);
-        STIMER_ASSERT(hstimer.ptasks[hstimer.wait_id].repetitions > 0);
-        STIMER_ASSERT(hstimer.ptasks[hstimer.wait_id].task_callback != NULL);
-        hstimer.ptask = &hstimer.ptasks[hstimer.wait_id];
+        uint16_t current_id = hstimer.wait_id;
+        STIMER_ASSERT(current_id < hstimer.size);
+        STIMER_ASSERT(hstimer.ptasks[current_id].repetitions > 0);
+        STIMER_ASSERT(hstimer.ptasks[current_id].task_callback != NULL);
+        hstimer.ptask = &hstimer.ptasks[current_id];
         if (STIMER_TASK_LOOP != hstimer.ptask->repetitions)
         {
             hstimer.ptask->repetitions--;
@@ -337,7 +339,7 @@ void stimer_serve(void)
         #if !!(STIMER_TASK_HOOK_ENABLE)
         if (hstimer.task_start_hook != NULL)
         {
-            hstimer.task_start_hook(hstimer.wait_id);
+            hstimer.task_start_hook(current_id);
         }
         #endif
 
@@ -352,7 +354,7 @@ void stimer_serve(void)
         #if !!(STIMER_TASK_HOOK_ENABLE)
         if (hstimer.task_end_hook != NULL)
         {
-            hstimer.task_end_hook(hstimer.wait_id);
+            hstimer.task_end_hook(current_id);
         }
         #endif
 
@@ -360,7 +362,7 @@ void stimer_serve(void)
         if (hstimer.ptask->repetitions > 0)
         {
             STIMER_DISABLE_INTERRUPTS();
-            stimer_scheduler(hstimer.wait_id);
+            stimer_scheduler(current_id);
             STIMER_ENABLE_INTERRUPTS();
         }
         else
@@ -368,10 +370,10 @@ void stimer_serve(void)
             #if !!(STIMER_TASK_HOOK_ENABLE)
             if (hstimer.task_stop_hook != NULL)
             {
-                hstimer.task_stop_hook(hstimer.wait_id);
+                hstimer.task_stop_hook(current_id);
             }
             #endif
-            stimer_task_stop(hstimer.wait_id);
+            stimer_task_stop(current_id);
         }
         hstimer.ptask = NULL;
     }

@@ -3,11 +3,14 @@ OUTPUT_PATH = output
 out: test.o stimer.o
 	gcc -g ${OUTPUT_PATH}/stimer.o ${OUTPUT_PATH}/test.o -o ${OUTPUT_PATH}/out
 
-stimer.o: stimer.c
+stimer.o: stimer.c | ${OUTPUT_PATH}
 	gcc -o ${OUTPUT_PATH}/stimer.o -c -g stimer.c
 
-test.o: test.c
+test.o: test.c | ${OUTPUT_PATH}
 	gcc -o ${OUTPUT_PATH}/test.o -c -g test.c
 
+${OUTPUT_PATH}:
+	mkdir ${OUTPUT_PATH}
+
 clean:
-	rm *.o *.exe
+	rm -rf ${OUTPUT_PATH}

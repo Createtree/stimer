@@ -113,6 +113,15 @@ void systick_interrupt_callback(void)
 
 ## Update Log 更新日志
 
+### 2026.05.21
+
+- Fixed `STIMER_ASSERT` configuration logic so enabled assert modes take effect
+- Fixed `STIMER_SELF_TASK` macro to reference the task table correctly
+- Made `stimer_serve` use a stable current task id while callbacks and hooks run
+- Initialized scheduler previous-node tracking to avoid uninitialized-variable warnings
+- Fixed test buffer allocation/initialization sizes and added the required string header
+- Updated the makefile to create and clean the output directory, and ignored build output
+
 ### 2024.06.03
 
 - Fix errors caused by multiple schedules
