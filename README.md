@@ -121,6 +121,8 @@ void systick_interrupt_callback(void)
 - Initialized scheduler previous-node tracking to avoid uninitialized-variable warnings
 - Fixed test buffer allocation/initialization sizes and added the required string header
 - Updated the makefile to create and clean the output directory, and ignored build output
+- Added GitHub Actions CI workflow for build, unit test, and warning-as-error checks
+- Removed Windows-only test include and cleaned test warnings for Linux CI
 
 ### 2024.06.03
 

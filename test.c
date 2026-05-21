@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <windows.h>
 #include <assert.h>
 #include "stimer.h"
 
@@ -44,7 +43,7 @@ uint16_t repeat_table[] = {
 #define task_function_template(NAME) \
     void NAME(void const *arg){\
         static int cnt = 0;\
-        printf("[%d]taskName:[" #NAME "] arg:[%X] cnt:[%d]\n", stimer_get_tick(), arg, ++cnt);\
+        printf("[%d]taskName:[" #NAME "] arg:[%p] cnt:[%d]\n", stimer_get_tick(), arg, ++cnt);\
     }
 
 task_function_template(task0)
@@ -230,7 +229,7 @@ static void test_task_tick_overflow(stimer_pfunc_t *taskFuncTable, uint16_t tabl
 static void test_task_preserve(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
 {
     assert(tableSize >= 1);
-    uint16_t id0, id1;
+    uint16_t id0;
     stimer_set_waitCnt(0);
     stimer_set_tick(0);
     run_task_cnt = 0;
@@ -246,7 +245,7 @@ static void test_task_preserve(stimer_pfunc_t *taskFuncTable, uint16_t tableSize
 static void test_task_repete(stimer_pfunc_t *taskFuncTable, uint16_t tableSize)
 {
     assert(tableSize >= 1);
-    uint16_t id0, id1;
+    uint16_t id0;
     int i = tableSize;
     stimer_set_waitCnt(0);
     stimer_set_tick(0);
@@ -284,6 +283,7 @@ void task_run_start_hook(uint16_t id)
 
 void task_run_schedule_hook(uint16_t id)
 {
+    (void)id;
 #if 0
     int cnt = stimer_get_wait_table(task_table, time_table, TASK_SIZE);
     printf("schedule: %d", task_table[0]);
@@ -295,7 +295,7 @@ void task_run_schedule_hook(uint16_t id)
 #endif
 }
 
-int main(int argc, char *argv[])
+int main(void)
 {
     /*
     tick 0 1 2 3 4 5 6 7 8 9
